@@ -1,38 +1,20 @@
 [
   {
     "id": 1,
-    "title": "Midnight Reverie",
-    "artist": "Luna Echoes",
-    "album": "Nocturn Sessions",
-    "duration": "3:48",
-    "src": "https://YOUR_DIRECT_MP3_LINK_HERE.mp3",
-    "cover": "https://YOUR_DIRECT_IMAGE_LINK_HERE.jpg"
-  },
-  {
-    "id": 2,
-    "title": "Amber Drift",
-    "artist": "The Still Hours",
-    "album": "Slow Light",
-    "duration": "4:12",
-    "src": "https://YOUR_DIRECT_MP3_LINK_HERE.mp3",
-    "cover": "https://YOUR_DIRECT_IMAGE_LINK_HERE.jpg"
-  },
-  {
-    "id": 3,
-    "title": "Glass Shore",
-    "artist": "Parallel Tides",
-    "album": "Parallel Tides EP",
-    "duration": "3:05",
-    "src": "https://YOUR_DIRECT_MP3_LINK_HERE.mp3",
-    "cover": "https://YOUR_DIRECT_IMAGE_LINK_HERE.jpg"
+    "title": "We Don't Talk Anymore",
+    "artist": "Charlie Puth",
+    "album": "Shadow Master",
+    "duration": "5:04",
+    "src": "https://www.dropbox.com/scl/fi/zxl7klnmq221l3kvd7qau/Charlie-Puth-We-Don-t-Talk-Anymore.mp3?rlkey=w6e4oj8ysa9c8nuz51516k5ht&st=4l32s645&dl=1",
+    "cover": "https://www.dropbox.com/scl/fi/a2yrnrg4rpp675rscu154/samurai.png?rlkey=mldzc8ulhc9vwd4induur79vs&st=2me9qvn2&dl=1"
   },
   {
     "id": 4,
-    "title": "Ironwood",
-    "artist": "Forest Sine",
+    "title": "Harleys-in-Hawaii",
+    "artist": "Shadow Master",
     "album": "Rooted",
-    "duration": "5:22",
-    "src": "https://YOUR_DIRECT_MP3_LINK_HERE.mp3",
-    "cover": "https://YOUR_DIRECT_IMAGE_LINK_HERE.jpg"
+    "duration": "3:26",
+    "src": "https://www.dropbox.com/scl/fi/19zl2ojjebrgrerhw9q15/ou-and-I-Harleys-in-Hawaii-Katy-Perry.mp3?rlkey=raaxhbdun2v8dypv7562b2blw&st=qgshxg7i&dl=1",
+    "cover": "https://www.dropbox.com/scl/fi/6r24cqim1qx2c4rfen6qb/rainmeter_mclarenp1_by_sontruong2666_dkrvb9r.png?rlkey=ibwofg5qnrh9o7w07m02ypzpt&st=9exxphdc&dl=1"
   }
 ]
