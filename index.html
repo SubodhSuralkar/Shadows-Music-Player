@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sonata — Music Player</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="grain-overlay"></div>
+
+  <div class="app-shell">
+
+    <!-- ───────────── LEFT PANEL: Player ───────────── -->
+    <aside class="player-panel">
+
+      <div class="brand">
+        <span class="brand-icon">◈</span>
+        <span class="brand-name">Sonata</span>
+      </div>
+
+      <div class="vinyl-stage">
+        <div class="vinyl-outer" id="vinyl">
+          <div class="vinyl-label">
+            <img id="cover-art" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23111'/%3E%3C/svg%3E" alt="Album Art" />
+          </div>
+          <div class="vinyl-ring r1"></div>
+          <div class="vinyl-ring r2"></div>
+          <div class="vinyl-ring r3"></div>
+        </div>
+        <div class="vinyl-reflection"></div>
+      </div>
+
+      <div class="track-info">
+        <div class="track-title" id="track-title">Select a track</div>
+        <div class="track-meta">
+          <span id="track-artist">—</span>
+          <span class="meta-dot">·</span>
+          <span id="track-album">—</span>
+        </div>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-bar-wrap" id="progress-wrap">
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progress-fill"></div>
+          </div>
+          <input type="range" class="progress-range" id="seek-bar" min="0" max="100" value="0" step="0.1" />
+        </div>
+        <div class="time-row">
+          <span id="time-current">0:00</span>
+          <span id="time-total">0:00</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="ctrl-btn" id="btn-prev" aria-label="Previous track" title="Previous">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+        </button>
+        <button class="ctrl-btn play-btn" id="btn-play" aria-label="Play / Pause">
+          <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+        </button>
+        <button class="ctrl-btn" id="btn-next" aria-label="Next track" title="Next">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+        </button>
+      </div>
+
+      <div class="volume-row">
+        <svg class="vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        <div class="volume-bar-wrap">
+          <div class="volume-bar-bg">
+            <div class="volume-bar-fill" id="volume-fill"></div>
+          </div>
+          <input type="range" class="volume-range" id="volume-bar" min="0" max="1" step="0.01" value="0.8" />
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ───────────── RIGHT PANEL: Library ───────────── -->
+    <main class="library-panel">
+
+      <header class="library-header">
+        <h2 class="library-title">Library</h2>
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="search" id="search-bar" class="search-input" placeholder="Search tracks, artists…" />
+        </div>
+      </header>
+
+      <div class="song-list-header">
+        <span class="col-num">#</span>
+        <span class="col-title">Title</span>
+        <span class="col-album">Album</span>
+        <span class="col-duration">Duration</span>
+      </div>
+
+      <ul class="song-list" id="song-list" role="listbox" aria-label="Song list">
+        <!-- Populated by script.js -->
+      </ul>
+
+      <div class="empty-state" id="empty-state" style="display:none">
+        <span>No tracks found</span>
+      </div>
+
+    </main>
+  </div>
+
+  <audio id="audio-player" preload="metadata"></audio>
+
+  <script src="script.js"></script>
+</body>
+</html>

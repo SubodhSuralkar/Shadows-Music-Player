@@ -1,0 +1,38 @@
+[
+  {
+    "id": 1,
+    "title": "Midnight Reverie",
+    "artist": "Luna Echoes",
+    "album": "Nocturn Sessions",
+    "duration": "3:48",
+    "src": "https://YOUR_DIRECT_MP3_LINK_HERE.mp3",
+    "cover": "https://YOUR_DIRECT_IMAGE_LINK_HERE.jpg"
+  },
+  {
+    "id": 2,
+    "title": "Amber Drift",
+    "artist": "The Still Hours",
+    "album": "Slow Light",
+    "duration": "4:12",
+    "src": "https://YOUR_DIRECT_MP3_LINK_HERE.mp3",
+    "cover": "https://YOUR_DIRECT_IMAGE_LINK_HERE.jpg"
+  },
+  {
+    "id": 3,
+    "title": "Glass Shore",
+    "artist": "Parallel Tides",
+    "album": "Parallel Tides EP",
+    "duration": "3:05",
+    "src": "https://YOUR_DIRECT_MP3_LINK_HERE.mp3",
+    "cover": "https://YOUR_DIRECT_IMAGE_LINK_HERE.jpg"
+  },
+  {
+    "id": 4,
+    "title": "Ironwood",
+    "artist": "Forest Sine",
+    "album": "Rooted",
+    "duration": "5:22",
+    "src": "https://YOUR_DIRECT_MP3_LINK_HERE.mp3",
+    "cover": "https://YOUR_DIRECT_IMAGE_LINK_HERE.jpg"
+  }
+]
