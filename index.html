@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Subodh — Music Player</title>
+  <title>Sonata — Music Player</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
-  <link rel="icon" type="image/jpg" href="cropped.jpg">
 </head>
 <body>
 
@@ -21,11 +20,15 @@
 
       <div class="brand">
         <span class="brand-icon">◈</span>
-        <span class="brand-name">Shadow</span>
+        <span class="brand-name">Sonata</span>
       </div>
 
-      <!-- Vinyl -->
-      <div class="vinyl-stage">
+      <!--
+        VINYL STAGE — swipe target
+        Touch listeners are bound here in JS (touchstart / touchend).
+        The .vinyl-outer receives the CSS tilt animation on swipe.
+      -->
+      <div class="vinyl-stage" id="vinyl-stage">
         <div class="vinyl-outer" id="vinyl">
           <div class="vinyl-label">
             <img id="cover-art"
@@ -36,6 +39,15 @@
           <div class="vinyl-ring r2"></div>
           <div class="vinyl-ring r3"></div>
         </div>
+
+        <!-- Swipe hint arrows — visible briefly on first touch -->
+        <div class="swipe-hint swipe-hint-left" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+        <div class="swipe-hint swipe-hint-right" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+
         <div class="vinyl-reflection"></div>
       </div>
 
@@ -43,31 +55,18 @@
       <div class="track-info">
         <div class="track-title-row">
           <div class="track-title" id="track-title">Select a track</div>
-
-          <!--
-            PLAYER HEART BUTTON
-            Reflects the favorite state of the currently playing song.
-            JS toggles the .is-favorite class on this element.
-          -->
           <button class="heart-btn player-heart" id="player-heart-btn"
                   aria-label="Add to favorites" title="Like this track">
             <svg class="heart-icon heart-outline" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="1.6"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06
-                       a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78
-                       1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                 stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
             <svg class="heart-icon heart-filled" viewBox="0 0 24 24"
-                 fill="currentColor" stroke="currentColor" stroke-width="1.6"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06
-                       a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78
-                       1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                 fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
           </button>
         </div>
-
         <div class="track-meta">
           <span id="track-artist">—</span>
           <span class="meta-dot">·</span>
@@ -90,8 +89,24 @@
         </div>
       </div>
 
-      <!-- Transport Controls -->
+      <!--
+        TRANSPORT CONTROLS
+        v3 layout: [shuffle] [prev] [PLAY] [next]
+        Shuffle btn gets .active class when shuffle is ON.
+      -->
       <div class="controls">
+        <button class="ctrl-btn shuffle-btn" id="btn-shuffle"
+                aria-label="Toggle shuffle" aria-pressed="false" title="Shuffle">
+          <!-- Shuffle icon (two crossing arrows) -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 3 21 3 21 8"/>
+            <line x1="4" y1="20" x2="21" y2="3"/>
+            <polyline points="21 16 21 21 16 21"/>
+            <line x1="15" y1="15" x2="21" y2="21"/>
+          </svg>
+        </button>
+
         <button class="ctrl-btn" id="btn-prev" aria-label="Previous track">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -119,26 +134,19 @@
         </button>
       </div>
 
-      <!--
-        AUTOPLAY TOGGLE ROW
-        Pill switch between controls and volume.
-        JS reads/writes #autoplay-toggle checkbox + localStorage.
-      -->
+      <!-- Autoplay Toggle -->
       <div class="autoplay-row">
         <span class="autoplay-label">Autoplay Next</span>
         <label class="toggle-switch" title="Toggle autoplay next">
           <input type="checkbox" id="autoplay-toggle" />
-          <span class="toggle-track">
-            <span class="toggle-thumb"></span>
-          </span>
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
         </label>
       </div>
 
       <!-- Volume -->
       <div class="volume-row">
         <svg class="vol-icon" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" stroke-linejoin="round">
+             stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
           <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
@@ -159,33 +167,19 @@
 
       <header class="library-header">
         <h2 class="library-title">Library</h2>
-
         <div class="library-controls">
-
-          <!--
-            FAVORITES FILTER PILL
-            Toggles showFavoritesOnly state in JS.
-            Works with text search (AND logic: both filters apply simultaneously).
-            Badge shows count of liked songs.
-          -->
           <button class="favorites-filter-btn" id="favorites-filter-btn"
                   aria-pressed="false" title="Show liked songs only">
             <svg class="fav-filter-icon" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="1.8"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06
-                       a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78
-                       1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
             <span class="fav-filter-label">Liked</span>
             <span class="fav-count-badge" id="fav-count-badge">0</span>
           </button>
-
-          <!-- Text search -->
           <div class="search-wrap">
             <svg class="search-icon" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="1.8"
-                 stroke-linecap="round" stroke-linejoin="round">
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"/>
               <line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
@@ -195,7 +189,6 @@
         </div>
       </header>
 
-      <!-- Column Headers — note the extra .col-like column -->
       <div class="song-list-header">
         <span class="col-num">#</span>
         <span class="col-title">Title</span>
