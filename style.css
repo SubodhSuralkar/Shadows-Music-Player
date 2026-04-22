@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════════
    SONATA — Dark Luxury Music Player
+   v2: + Favorites System + Autoplay Toggle
    Theme: Refined Charcoal × Amber Gold
 ═══════════════════════════════════════════ */
 
@@ -15,15 +16,23 @@
   --gold-glow:     rgba(201, 169, 110, 0.18);
   --gold-subtle:   rgba(201, 169, 110, 0.07);
 
+  /* Heart / Favorites red-rose accent */
+  --rose:          #e0637a;
+  --rose-dim:      #a8415a;
+  --rose-glow:     rgba(224, 99, 122, 0.25);
+  --rose-subtle:   rgba(224, 99, 122, 0.08);
+
   --text-primary:  #e8e0d0;
   --text-secondary:#7a7568;
   --text-muted:    #42403b;
 
   --border:        rgba(255, 255, 255, 0.06);
   --border-gold:   rgba(201, 169, 110, 0.25);
+  --border-rose:   rgba(224, 99, 122, 0.3);
 
   --radius:        14px;
   --radius-sm:     8px;
+  --radius-pill:   999px;
 
   --font-display:  'Cormorant Garamond', Georgia, serif;
   --font-mono:     'DM Mono', 'Courier New', monospace;
@@ -110,11 +119,7 @@ body {
   align-self: flex-start;
   margin-bottom: 36px;
 }
-.brand-icon {
-  font-size: 18px;
-  color: var(--gold);
-  line-height: 1;
-}
+.brand-icon { font-size: 18px; color: var(--gold); line-height: 1; }
 .brand-name {
   font-family: var(--font-display);
   font-size: 22px;
@@ -129,16 +134,14 @@ body {
   position: relative;
   width: var(--vinyl-size);
   height: var(--vinyl-size);
-  margin-bottom: 32px;
+  margin-bottom: 28px;
   flex-shrink: 0;
 }
-
 .vinyl-outer {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 50%, #1a1a1a 0%, #0a0a0a 50%, #1c1c1c 100%);
+  background: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #0a0a0a 50%, #1c1c1c 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -161,11 +164,7 @@ body {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
-.vinyl-outer.paused {
-  animation-play-state: paused;
-}
-
-/* Concentric rings on the vinyl */
+.vinyl-outer.paused { animation-play-state: paused; }
 .vinyl-ring {
   position: absolute;
   border-radius: 50%;
@@ -175,8 +174,6 @@ body {
 .r1 { width: 78%; height: 78%; }
 .r2 { width: 60%; height: 60%; }
 .r3 { width: 44%; height: 44%; }
-
-/* Center label / cover art */
 .vinyl-label {
   width: 38%;
   height: 38%;
@@ -187,13 +184,7 @@ body {
   z-index: 2;
   box-shadow: 0 2px 12px rgba(0,0,0,0.6);
 }
-.vinyl-label img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* Reflection beneath vinyl */
+.vinyl-label img { width: 100%; height: 100%; object-fit: cover; }
 .vinyl-reflection {
   position: absolute;
   bottom: -28px;
@@ -209,21 +200,36 @@ body {
 /* ── Track Info ─────────────────────────── */
 .track-info {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
   width: 100%;
 }
+
+/*
+  NEW: title row — title text + heart button side-by-side
+  Uses flex so the heart doesn't cause layout shift
+*/
+.track-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  min-height: 32px; /* prevent row height jump when heart appears */
+}
+
 .track-title {
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 400;
   color: var(--text-primary);
   line-height: 1.2;
-  margin-bottom: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.02em;
+  max-width: 210px;
 }
+
 .track-meta {
   color: var(--text-secondary);
   font-size: 11px;
@@ -235,10 +241,83 @@ body {
 }
 .meta-dot { color: var(--gold-dim); font-size: 8px; }
 
+/* ═══════════════════════════════════════════
+   HEART BUTTON — shared styles
+   Used in both the player panel and song rows
+═══════════════════════════════════════════ */
+
+.heart-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+  /* Prevent text selection on double-click */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease;
+}
+.heart-btn:hover { transform: scale(1.15); }
+.heart-btn:active { transform: scale(0.9); }
+
+.heart-icon {
+  display: block;
+  transition: opacity 0.15s ease, transform 0.2s ease;
+}
+
+/* Default unfavorited state: show outline, hide filled */
+.heart-btn .heart-outline { opacity: 1; color: var(--text-secondary); }
+.heart-btn .heart-filled  { opacity: 0; position: absolute; color: var(--rose); transform: scale(0.4); }
+
+/* Favorited state: hide outline, show filled heart */
+.heart-btn.is-favorite .heart-outline { opacity: 0; }
+.heart-btn.is-favorite .heart-filled  {
+  opacity: 1;
+  transform: scale(1);
+  filter: drop-shadow(0 0 5px var(--rose-glow));
+}
+
+/*
+  Pop burst animation — plays once when a song is ADDED to favorites.
+  JS adds .heart-pop class, CSS animation fires, JS removes class on animationend.
+*/
+@keyframes heart-pop {
+  0%   { transform: scale(0.4); }
+  45%  { transform: scale(1.35); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.heart-btn.heart-pop .heart-filled {
+  animation: heart-pop 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/* ── Player Heart (in panel) ─────────────── */
+.player-heart .heart-icon { width: 18px; height: 18px; }
+.player-heart { opacity: 0; pointer-events: none; transition: opacity 0.3s ease, transform 0.15s ease; }
+/* Only show heart when a track is loaded */
+.player-heart.visible { opacity: 1; pointer-events: auto; }
+
+/* ── Row Heart (in song list) ────────────── */
+.row-heart .heart-icon { width: 15px; height: 15px; }
+.row-heart {
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+/* Heart in rows: show on row hover OR when already a favorite */
+.song-item:hover .row-heart,
+.row-heart.is-favorite {
+  opacity: 1;
+}
+
 /* ── Progress ───────────────────────────── */
 .progress-section {
   width: 100%;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 .progress-bar-wrap {
   position: relative;
@@ -278,7 +357,6 @@ body {
   transition: opacity 0.2s ease;
 }
 .progress-bar-wrap:hover .progress-bar-fill::after { opacity: 1; }
-
 .progress-range {
   position: absolute;
   width: 100%;
@@ -287,7 +365,6 @@ body {
   cursor: pointer;
   margin: 0;
 }
-
 .time-row {
   display: flex;
   justify-content: space-between;
@@ -301,7 +378,7 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 .ctrl-btn {
   background: none;
@@ -318,8 +395,6 @@ body {
 .ctrl-btn svg { width: 20px; height: 20px; display: block; }
 .ctrl-btn:hover { color: var(--text-primary); }
 .ctrl-btn:active { transform: scale(0.9); }
-
-/* Play / Pause — larger, gold */
 .play-btn {
   width: 56px;
   height: 56px;
@@ -328,14 +403,102 @@ body {
   border-radius: 50%;
   box-shadow: 0 4px 20px rgba(201,169,110,0.35);
   padding: 0;
-  transition: box-shadow 0.2s ease, transform 0.15s ease, background 0.2s ease;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
 .play-btn svg { width: 22px; height: 22px; }
-.play-btn:hover {
-  box-shadow: 0 6px 28px rgba(201,169,110,0.5);
-  transform: scale(1.05);
-}
+.play-btn:hover { box-shadow: 0 6px 28px rgba(201,169,110,0.5); transform: scale(1.05); }
 .play-btn:active { transform: scale(0.95); }
+
+/* ═══════════════════════════════════════════
+   AUTOPLAY TOGGLE ROW  (NEW)
+═══════════════════════════════════════════ */
+.autoplay-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 2px;
+  margin-bottom: 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.autoplay-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/*
+  TOGGLE SWITCH — pure CSS pill switch
+  The checkbox is invisible; the styled <span>s do all the visual work.
+  JS only sets checkbox.checked — CSS transitions handle everything else.
+*/
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  /* Minimum touch target 44×44px for mobile */
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: flex-end;
+}
+
+/* Hide the native checkbox entirely */
+.toggle-switch input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* The pill track */
+.toggle-track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Checked state — track turns gold */
+.toggle-switch input:checked + .toggle-track {
+  background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+  border-color: var(--gold);
+  box-shadow: 0 0 10px var(--gold-glow);
+}
+
+/* The sliding thumb */
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.25s ease,
+              box-shadow 0.25s ease;
+}
+
+/* Checked state — thumb slides right and brightens */
+.toggle-switch input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(18px);
+  background: var(--bg-deep);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* Focus ring for keyboard accessibility */
+.toggle-switch input:focus-visible + .toggle-track {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
 
 /* ── Volume ──────────────────────────────── */
 .volume-row {
@@ -406,6 +569,85 @@ body {
   text-transform: uppercase;
 }
 
+/*
+  NEW: Library controls row — favorites pill + search side by side
+*/
+.library-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Favorites Filter Pill (NEW) ─────────── */
+.favorites-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+  transition:
+    background  0.2s ease,
+    border-color 0.2s ease,
+    color       0.2s ease,
+    box-shadow  0.2s ease;
+  white-space: nowrap;
+  /* Touch target */
+  min-height: 38px;
+}
+.favorites-filter-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-rose);
+}
+
+/* Active state — when "Show Liked Only" is ON */
+.favorites-filter-btn.active {
+  background: var(--rose-subtle);
+  border-color: var(--border-rose);
+  color: var(--rose);
+  box-shadow: 0 0 14px var(--rose-glow);
+}
+.favorites-filter-btn.active .fav-filter-icon { color: var(--rose); }
+
+.fav-filter-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+.fav-filter-label { line-height: 1; }
+
+/* Badge showing count of liked songs */
+.fav-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-active);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.favorites-filter-btn.active .fav-count-badge {
+  background: var(--rose-dim);
+  color: #fff;
+}
+/* Hide badge when count is 0 */
+.fav-count-badge[data-count="0"] { display: none; }
+
 /* ── Search ──────────────────────────────── */
 .search-wrap {
   position: relative;
@@ -430,9 +672,10 @@ body {
   font-size: 12px;
   font-weight: 300;
   letter-spacing: 0.04em;
-  width: 220px;
+  width: 200px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 38px;
 }
 .search-input::placeholder { color: var(--text-muted); }
 .search-input:focus {
@@ -441,10 +684,19 @@ body {
 }
 
 /* ── Song List Header ────────────────────── */
-.song-list-header {
+/*
+  NEW column grid: # | Title | Album | ♥ | Duration
+  The like column is narrow — just enough for the heart icon.
+*/
+.song-list-header,
+.song-item {
   display: grid;
-  grid-template-columns: 36px 1fr 160px 64px;
-  padding: 0 16px 10px;
+  grid-template-columns: 36px 1fr 160px 36px 64px;
+  align-items: center;
+}
+
+.song-list-header {
+  padding: 0 12px 10px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
   color: var(--text-muted);
@@ -454,25 +706,16 @@ body {
 }
 
 /* ── Song List ───────────────────────────── */
-.song-list {
-  list-style: none;
-  flex: 1;
-}
+.song-list { list-style: none; flex: 1; }
 
 .song-item {
-  display: grid;
-  grid-template-columns: 36px 1fr 160px 64px;
-  align-items: center;
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 0.15s ease;
-  position: relative;
   border: 1px solid transparent;
 }
-.song-item:hover {
-  background: var(--bg-hover);
-}
+.song-item:hover { background: var(--bg-hover); }
 .song-item.active {
   background: var(--bg-active);
   border-color: var(--border-gold);
@@ -480,21 +723,9 @@ body {
 .song-item.active .song-num { color: var(--gold); }
 .song-item.active .song-title-text { color: var(--gold); }
 
-/* Animated bar indicator for playing state */
-.song-item.playing-indicator .song-num {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-  height: 16px;
-}
-.song-item.playing-indicator .song-num span {
-  display: none; /* hide the number */
-}
-.song-item.playing-indicator .song-num::after {
-  content: '';
-  display: flex;
-}
+/* Equalizer bars */
+.num-text { display: block; }
+.song-item.active .num-text { display: none; }
 .bar-visual {
   display: none;
   align-items: flex-end;
@@ -514,12 +745,10 @@ body {
 .bar-visual span:nth-child(2) { height: 100%; animation-delay: 0.15s; }
 .bar-visual span:nth-child(3) { height: 60%; animation-delay: 0.3s; }
 .bar-visual span:nth-child(4) { height: 80%; animation-delay: 0.1s; }
-
 @keyframes bar-bounce {
   0%, 100% { transform: scaleY(0.4); }
   50%       { transform: scaleY(1); }
 }
-
 .song-item.active.paused-indicator .bar-visual span {
   animation-play-state: paused;
 }
@@ -529,9 +758,6 @@ body {
   font-size: 12px;
   text-align: center;
 }
-.song-num .num-text { display: block; }
-.song-item.active .num-text { display: none; }
-
 .song-title-col {
   display: flex;
   flex-direction: column;
@@ -563,17 +789,37 @@ body {
   text-overflow: ellipsis;
   padding-right: 12px;
 }
+
+/* NEW: like cell — center the heart */
+.song-like-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .song-duration-text {
   color: var(--text-muted);
   font-size: 11px;
   text-align: right;
 }
 
-/* ── Empty state ─────────────────────────── */
+/* ── Empty State ─────────────────────────── */
 .empty-state {
   padding: 60px 0;
   text-align: center;
   color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.empty-icon {
+  font-size: 32px;
+  color: var(--rose-dim);
+  opacity: 0.4;
+  line-height: 1;
+}
+#empty-message {
   font-size: 13px;
   letter-spacing: 0.1em;
 }
@@ -583,36 +829,21 @@ body {
 ═══════════════════════════════════════════ */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: var(--bg-card);
-  border-radius: 4px;
-}
+::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ═══════════════════════════════════════════
-   RANGE INPUT — Cross-browser reset
+   RANGE INPUT — cross-browser reset
 ═══════════════════════════════════════════ */
-input[type=range] {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-}
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 0; height: 0;
-}
-input[type=range]::-moz-range-thumb {
-  width: 0; height: 0; border: none;
-}
+input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 0; height: 0; }
+input[type=range]::-moz-range-thumb { width: 0; height: 0; border: none; }
 
 /* ═══════════════════════════════════════════
    RESPONSIVE — Mobile
 ═══════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .app-shell {
-    flex-direction: column;
-    min-height: 100vh;
-  }
+  .app-shell { flex-direction: column; }
 
   .player-panel {
     width: 100%;
@@ -626,28 +857,24 @@ input[type=range]::-moz-range-thumb {
 
   :root { --vinyl-size: 180px; }
 
-  .library-panel {
-    padding: 24px 16px;
-  }
-
+  .library-panel { padding: 24px 16px; }
   .library-title { font-size: 26px; }
+  .library-header { flex-direction: column; align-items: flex-start; gap: 12px; }
 
-  .library-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
+  .library-controls { width: 100%; }
+  .search-wrap { flex: 1; }
   .search-input { width: 100%; }
-  .search-wrap { width: 100%; }
 
+  /* On mobile, collapse album column */
   .song-list-header,
   .song-item {
-    grid-template-columns: 36px 1fr 64px;
+    grid-template-columns: 36px 1fr 36px 60px;
   }
   .col-album, .song-album-text { display: none; }
 }
 
 @media (max-width: 420px) {
   :root { --vinyl-size: 150px; }
-  .track-title { font-size: 20px; }
+  .track-title { font-size: 19px; }
+  .favorites-filter-btn .fav-filter-label { display: none; } /* icon + badge only */
 }
