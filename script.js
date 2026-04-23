@@ -74,6 +74,14 @@ let userVolume    = 0.8;
  */
 let fadeRafId     = null;
 
+// ── Stale-source reload guard ─────────────────────────────────────
+/**
+ * hasReloadAttempted: reset to false every time loadTrack() is called
+ * with a deliberate user action. The error handler sets it to true after
+ * its first automatic reload so we never loop on a permanently dead URL.
+ */
+let hasReloadAttempted = false;
+
 // ═══════════════════════════════════════════
 //  DOM REFS
 // ═══════════════════════════════════════════
@@ -308,21 +316,88 @@ function cancelFade() {
 }
 
 /**
+ * reloadAndPlay — re-fetches the current track's src from the in-memory
+ * catalogue and resumes playback once the browser signals it has enough data.
+ *
+ * WHY THIS EXISTS
+ * ───────────────
+ * Dropbox and Google Drive issue short-lived signed URLs. After the tab has
+ * been open (or backgrounded on iOS) for an extended period, those tokens
+ * expire. audio.readyState may still report HAVE_METADATA or higher because
+ * the browser cached that information earlier — so it looks healthy but the
+ * actual network resource is gone. Re-assigning audio.src forces a completely
+ * fresh HTTP request with the same URL string (which works because the URL
+ * in songs.json is permanent; it's the signed redirect that expired, not the
+ * Dropbox/Drive URL itself).
+ *
+ * FLOW
+ * ────
+ * 1. Re-assign audio.src from the catalogue entry (same URL; fresh request)
+ * 2. audio.load() resets the element to HAVE_NOTHING and starts buffering
+ * 3. Listen for 'canplay' (browser has buffered enough to start playback)
+ * 4. Call fadeIn() from within that listener — the src is now healthy
+ */
+function reloadAndPlay() {
+  const song = filteredSongs[currentIndex];
+  if (!song) return;
+
+  console.info(`[Sonata] Source stale or exhausted — reloading "${song.title}"`);
+
+  cancelFade();
+  // Silence immediately so there's no volume artefact during the reload
+  audio.volume = 0;
+
+  // Re-assign the identical URL; this forces a fresh network request.
+  // Do NOT call loadTrack() here — that would reset playback position,
+  // clear the UI, and lose the hasReloadAttempted guard.
+  audio.src = song.src;
+  audio.load();
+
+  // 'canplay' fires as soon as the browser has buffered enough to start.
+  // { once: true } ensures this never fires more than once per reload call.
+  audio.addEventListener("canplay", () => {
+    fadeIn();
+  }, { once: true });
+}
+
+/**
  * Fade audio.volume from 0 → userVolume over FADE_DURATION_MS,
  * starting audio playback at volume 0 then ramping up.
  *
- * The ramp uses a cubic easing curve for a natural acoustic feel:
- *   volume = (t/duration)^2 × userVolume
+ * READYSTATE CHECK (new in v4)
+ * ────────────────────────────
+ * HTMLMediaElement.readyState constants:
+ *   HAVE_NOTHING      0  — no data at all; src is dead or never loaded
+ *   HAVE_METADATA     1  — duration/dimensions known but no playable data
+ *   HAVE_CURRENT_DATA 2  — current frame available; next frame may not be
+ *   HAVE_FUTURE_DATA  3  — current + next frames available; can play
+ *   HAVE_ENOUGH_DATA  4  — browser predicts it can play to the end
+ *
+ * States 0 and 1 mean audio.play() will likely fail or produce silence.
+ * Before calling play(), we check and reload if necessary.
+ *
+ * The ramp uses ease-in quadratic for a natural acoustic feel:
+ *   volume = (elapsed/duration)² × userVolume
  */
 function fadeIn() {
   cancelFade();
+
+  // Guard: if the browser has no buffered data (stale URL, long pause,
+  // iOS background audio release), reload the source first.
+  // We only do this once per track (hasReloadAttempted) to avoid an
+  // infinite loop on a URL that is genuinely broken.
+  if (audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA && !hasReloadAttempted) {
+    hasReloadAttempted = true;
+    reloadAndPlay();
+    return;
+  }
+
   audio.volume = 0;
 
   audio.play().catch(err => {
-    console.warn("Playback blocked:", err);
+    console.warn("[Sonata] Playback blocked:", err);
     setPlayingState(false);
     audio.volume = userVolume;
-    return;
   });
 
   const target    = userVolume;
@@ -331,7 +406,7 @@ function fadeIn() {
   function tick(now) {
     const elapsed  = now - startTime;
     const progress = Math.min(elapsed / FADE_DURATION_MS, 1);
-    // Ease-in quadratic: starts slow, ramps up
+    // Ease-in quadratic: starts slow, ramps up naturally
     audio.volume = Math.pow(progress, 2) * target;
 
     if (progress < 1) {
@@ -651,6 +726,10 @@ function loadTrack(idx, autoPlay = false) {
   cancelFade();
   audio.volume = userVolume;
 
+  // Every deliberate track load resets the reload guard so the error handler
+  // gets exactly one automatic retry attempt for the new track's URL.
+  hasReloadAttempted = false;
+
   currentIndex = idx;
   const song   = filteredSongs[idx];
 
@@ -816,9 +895,52 @@ audio.addEventListener("ended", () => {
   }
 });
 
+/**
+ * NETWORK ERROR HANDLER (new in v4)
+ * ───────────────────────────────────
+ * The browser fires 'error' on the audio element when:
+ *   • The network request for the src URL fails (expired Dropbox token → 401/403)
+ *   • The media format is unsupported
+ *   • A decode error occurs mid-stream
+ *
+ * MediaError.code values:
+ *   MEDIA_ERR_ABORTED      1  — user or script aborted (not a real failure)
+ *   MEDIA_ERR_NETWORK      2  — network failure mid-load (expired URL, offline)
+ *   MEDIA_ERR_DECODE       3  — decode error (corrupt file)
+ *   MEDIA_ERR_SRC_NOT_SUPPORTED 4 — unsupported format or empty src
+ *
+ * Strategy:
+ *   1. For network errors (code 2): attempt one silent reload via reloadAndPlay().
+ *      This handles the common case of a Dropbox signed URL expiring mid-session.
+ *   2. If the reload already failed (hasReloadAttempted === true), or it's a
+ *      non-network error, show the UI error message and stop trying.
+ *   3. Code 1 (aborted by us) is silently ignored — it fires during every
+ *      deliberate track switch and is not a real error.
+ */
 audio.addEventListener("error", () => {
-  console.error("Audio failed:", audio.src);
+  const err  = audio.error;
+  const code = err ? err.code : 0;
+
+  // Code 1 = MEDIA_ERR_ABORTED: fires whenever we call audio.load() to switch
+  // tracks. This is intentional behaviour, not an error — ignore it silently.
+  if (code === MediaError.MEDIA_ERR_ABORTED) return;
+
+  console.warn(`[Sonata] Audio error — code ${code}:`, err ? err.message : "unknown");
+
+  // Network error + first attempt → try a fresh reload before giving up
+  if (code === MediaError.MEDIA_ERR_NETWORK && !hasReloadAttempted) {
+    hasReloadAttempted = true;
+    console.info("[Sonata] Network error detected — attempting one automatic reload");
+    reloadAndPlay();
+    return;
+  }
+
+  // All other cases (decode error, unsupported format, or reload already tried):
+  // surface the error to the user and reset state cleanly.
+  console.error("[Sonata] Unrecoverable audio error — giving up");
   setPlayingState(false);
+  cancelFade();
+  audio.volume = userVolume;
   trackTitle.textContent = "⚠ Could not load track";
 });
 
