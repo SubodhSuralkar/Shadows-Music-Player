@@ -1,43 +1,21 @@
 /**
  * SONATA — Music Player  v3
- * ─────────────────────────────────────────────────────────────────
- * New in v3:
- *   • Swipe gestures   — touch left/right on vinyl to skip tracks
- *   • True shuffle     — Fisher-Yates queue, persisted to localStorage
- *   • Deep linking     — ?track=ID auto-loads & plays on page open
- *   • Volume fade      — 2s rAF fade-in / fade-out on play/pause
- *
- * localStorage keys:
- *   sonata_last_song   → number   (original-catalogue index)
- *   sonata_volume      → number   (0–1, user's preferred volume)
- *   sonata_favorites   → JSON number[]
- *   sonata_autoplay    → "true"|"false"
- *   sonata_shuffle     → "true"|"false"    NEW
- * ─────────────────────────────────────────────────────────────────
  */
 
 "use strict";
-
-// ═══════════════════════════════════════════
-//  CONSTANTS
-// ═══════════════════════════════════════════
 
 const SONGS_URL        = "songs.json";
 const LS_SONG_KEY      = "sonata_last_song";
 const LS_VOL_KEY       = "sonata_volume";
 const LS_FAVORITES_KEY = "sonata_favorites";
 const LS_AUTOPLAY_KEY  = "sonata_autoplay";
-const LS_SHUFFLE_KEY   = "sonata_shuffle";   // NEW
+const LS_SHUFFLE_KEY   = "sonata_shuffle";
 
-const FADE_DURATION_MS = 2000;   // fade in/out duration
-const SWIPE_THRESHOLD  = 50;     // px — minimum horizontal swipe distance
-const SWIPE_VERT_MAX   = 75;     // px — maximum vertical drift before swipe is ignored
+const FADE_DURATION_MS = 2000;
+const SWIPE_THRESHOLD  = 50;
+const SWIPE_VERT_MAX   = 75;
 
 const FALLBACK_ART = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='512' height='512' fill='%23111'/%3E%3Ccircle cx='256' cy='256' r='80' fill='%23222'/%3E%3C/svg%3E";
-
-// ═══════════════════════════════════════════
-//  STATE
-// ═══════════════════════════════════════════
 
 let songs             = [];
 let filteredSongs     = [];
@@ -48,43 +26,14 @@ let favorites         = new Set();
 let showFavoritesOnly = false;
 let autoplayEnabled   = true;
 
-// ── Shuffle state ──────────────────────────────────────────────────
 let isShuffled    = false;
-/**
- * shuffleQueue: array of filteredSongs indices in Fisher-Yates order.
- * Example: [3, 0, 5, 1, 4, 2]  (indices into filteredSongs)
- */
 let shuffleQueue  = [];
-/**
- * shufflePos: our current position in shuffleQueue.
- * nextTrack advances it; prevTrack retreats it.
- */
 let shufflePos    = -1;
 
-// ── Volume fade state ─────────────────────────────────────────────
-/**
- * userVolume: the volume the user has chosen with the slider.
- * audio.volume is allowed to differ temporarily during fades.
- * setVolume() always updates userVolume; fade functions target it.
- */
 let userVolume    = 0.8;
-/**
- * fadeRafId: the requestAnimationFrame id for any in-progress fade.
- * cancelFade() uses this to abort cleanly.
- */
 let fadeRafId     = null;
 
-// ── Stale-source reload guard ─────────────────────────────────────
-/**
- * hasReloadAttempted: reset to false every time loadTrack() is called
- * with a deliberate user action. The error handler sets it to true after
- * its first automatic reload so we never loop on a permanently dead URL.
- */
 let hasReloadAttempted = false;
-
-// ═══════════════════════════════════════════
-//  DOM REFS
-// ═══════════════════════════════════════════
 
 const audio              = document.getElementById("audio-player");
 const vinylStage         = document.getElementById("vinyl-stage");
@@ -115,10 +64,6 @@ const favoritesFilterBtn = document.getElementById("favorites-filter-btn");
 const favCountBadge      = document.getElementById("fav-count-badge");
 const autoplayToggle     = document.getElementById("autoplay-toggle");
 
-// ═══════════════════════════════════════════
-//  UTILITIES
-// ═══════════════════════════════════════════
-
 function formatTime(secs) {
   if (isNaN(secs) || secs < 0) return "0:00";
   const m = Math.floor(secs / 60);
@@ -134,10 +79,6 @@ function escapeHTML(str) {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-// ═══════════════════════════════════════════
-//  BOOT
-// ═══════════════════════════════════════════
-
 async function init() {
   try {
     const res = await fetch(SONGS_URL);
@@ -152,7 +93,6 @@ async function init() {
     return;
   }
 
-  // Hydrate all persisted preferences before first render
   loadFavorites();
   loadAutoplayPreference();
   loadShufflePreference();
@@ -161,7 +101,6 @@ async function init() {
   renderSongList(filteredSongs);
   updateFavCountBadge();
 
-  // Deep link takes priority over session restore
   const deepLinked = checkDeepLink();
   if (!deepLinked) restoreSession();
 
@@ -172,43 +111,19 @@ async function init() {
   bindSwipeGestures();
 }
 
-// ═══════════════════════════════════════════
-//  ─── FEATURE 3: DEEP LINKING ────────────
-// ═══════════════════════════════════════════
-
-/**
- * Checks the URL for a ?track=ID parameter.
- * If found, loads and autoplays that track, bypassing session restore.
- *
- * Usage:  https://yoursite.vercel.app/?track=3
- *   → finds the song with id === 3 and plays it immediately.
- *
- * @returns {boolean}  true if a valid deep link was found and acted on.
- */
 function checkDeepLink() {
   const params  = new URLSearchParams(window.location.search);
   const trackId = params.get("track");
   if (!trackId) return false;
 
   const id  = parseInt(trackId, 10);
-  if (isNaN(id)) {
-    console.warn(`Deep link: invalid track id "${trackId}"`);
-    return false;
-  }
+  if (isNaN(id)) return false;
 
-  // Search across the full catalogue, not just filteredSongs,
-  // so the deep link works even when a search or favorites filter is active.
   const catalogueIdx = songs.findIndex(s => Number(s.id) === id);
-  if (catalogueIdx === -1) {
-    console.warn(`Deep link: no song with id=${id} found in catalogue`);
-    return false;
-  }
+  if (catalogueIdx === -1) return false;
 
-  // Ensure filteredSongs contains this track.
-  // If it's currently hidden by search/favorites, reset filters first.
   const filteredIdx = filteredSongs.findIndex(s => Number(s.id) === id);
   if (filteredIdx === -1) {
-    // Clear any active filters so the song is visible
     showFavoritesOnly = false;
     searchBar.value   = "";
     favoritesFilterBtn.classList.remove("active");
@@ -219,16 +134,12 @@ function checkDeepLink() {
 
   const resolvedIdx = filteredSongs.findIndex(s => Number(s.id) === id);
   if (resolvedIdx !== -1) {
-    loadTrack(resolvedIdx, true);  // autoplay = true
+    loadTrack(resolvedIdx, true);
     return true;
   }
 
   return false;
 }
-
-// ═══════════════════════════════════════════
-//  ─── FEATURE 2: SHUFFLE (Fisher-Yates) ──
-// ═══════════════════════════════════════════
 
 function loadShufflePreference() {
   const stored   = localStorage.getItem(LS_SHUFFLE_KEY);
@@ -238,38 +149,19 @@ function loadShufflePreference() {
   if (isShuffled && filteredSongs.length > 0) buildShuffleQueue();
 }
 
-/**
- * Fisher-Yates shuffle of an array (in-place).
- * Guaranteed uniform distribution — every permutation equally likely.
- * Time complexity: O(n).
- *
- * @param {any[]} arr  Array to shuffle in-place.
- * @returns {any[]}    The same array, now shuffled.
- */
 function fisherYatesShuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    // Destructured swap — no temp variable needed
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
 
-/**
- * Build a new shuffleQueue from the current filteredSongs indices.
- *
- * Strategy: if a song is currently playing, move it to position 0
- * so it sits at the "start" of history. The next call to nextTrack()
- * will advance to position 1 (the first truly random song).
- * This avoids the common UX annoyance of replaying the current song
- * immediately after toggling shuffle.
- */
 function buildShuffleQueue() {
   const indices = filteredSongs.map((_, i) => i);
   fisherYatesShuffle(indices);
 
   if (currentIndex >= 0) {
-    // Move currentIndex to front so history navigation makes sense
     const pos = indices.indexOf(currentIndex);
     if (pos > 0) [indices[0], indices[pos]] = [indices[pos], indices[0]];
     shufflePos = 0;
@@ -288,9 +180,8 @@ function bindShuffleBtn() {
     btnShuffle.classList.toggle("active", isShuffled);
     btnShuffle.setAttribute("aria-pressed", isShuffled);
 
-    // Pop animation
     btnShuffle.classList.remove("shuffle-pop");
-    void btnShuffle.offsetWidth;  // force reflow to restart animation
+    void btnShuffle.offsetWidth;
     btnShuffle.classList.add("shuffle-pop");
     btnShuffle.addEventListener("animationend",
       () => btnShuffle.classList.remove("shuffle-pop"), { once: true });
@@ -299,15 +190,6 @@ function bindShuffleBtn() {
   });
 }
 
-// ═══════════════════════════════════════════
-//  ─── FEATURE 4: VOLUME FADE ─────────────
-// ═══════════════════════════════════════════
-
-/**
- * Cancel any in-flight fade animation immediately.
- * Does NOT touch audio.volume — the caller is responsible for restoring
- * audio.volume to a sane value after cancelling.
- */
 function cancelFade() {
   if (fadeRafId !== null) {
     cancelAnimationFrame(fadeRafId);
@@ -315,28 +197,6 @@ function cancelFade() {
   }
 }
 
-/**
- * reloadAndPlay — re-fetches the current track's src from the in-memory
- * catalogue and resumes playback once the browser signals it has enough data.
- *
- * WHY THIS EXISTS
- * ───────────────
- * Dropbox and Google Drive issue short-lived signed URLs. After the tab has
- * been open (or backgrounded on iOS) for an extended period, those tokens
- * expire. audio.readyState may still report HAVE_METADATA or higher because
- * the browser cached that information earlier — so it looks healthy but the
- * actual network resource is gone. Re-assigning audio.src forces a completely
- * fresh HTTP request with the same URL string (which works because the URL
- * in songs.json is permanent; it's the signed redirect that expired, not the
- * Dropbox/Drive URL itself).
- *
- * FLOW
- * ────
- * 1. Re-assign audio.src from the catalogue entry (same URL; fresh request)
- * 2. audio.load() resets the element to HAVE_NOTHING and starts buffering
- * 3. Listen for 'canplay' (browser has buffered enough to start playback)
- * 4. Call fadeIn() from within that listener — the src is now healthy
- */
 function reloadAndPlay() {
   const song = filteredSongs[currentIndex];
   if (!song) return;
@@ -344,48 +204,19 @@ function reloadAndPlay() {
   console.info(`[Sonata] Source stale or exhausted — reloading "${song.title}"`);
 
   cancelFade();
-  // Silence immediately so there's no volume artefact during the reload
   audio.volume = 0;
 
-  // Re-assign the identical URL; this forces a fresh network request.
-  // Do NOT call loadTrack() here — that would reset playback position,
-  // clear the UI, and lose the hasReloadAttempted guard.
   audio.src = song.src;
   audio.load();
 
-  // 'canplay' fires as soon as the browser has buffered enough to start.
-  // { once: true } ensures this never fires more than once per reload call.
   audio.addEventListener("canplay", () => {
     fadeIn();
   }, { once: true });
 }
 
-/**
- * Fade audio.volume from 0 → userVolume over FADE_DURATION_MS,
- * starting audio playback at volume 0 then ramping up.
- *
- * READYSTATE CHECK (new in v4)
- * ────────────────────────────
- * HTMLMediaElement.readyState constants:
- *   HAVE_NOTHING      0  — no data at all; src is dead or never loaded
- *   HAVE_METADATA     1  — duration/dimensions known but no playable data
- *   HAVE_CURRENT_DATA 2  — current frame available; next frame may not be
- *   HAVE_FUTURE_DATA  3  — current + next frames available; can play
- *   HAVE_ENOUGH_DATA  4  — browser predicts it can play to the end
- *
- * States 0 and 1 mean audio.play() will likely fail or produce silence.
- * Before calling play(), we check and reload if necessary.
- *
- * The ramp uses ease-in quadratic for a natural acoustic feel:
- *   volume = (elapsed/duration)² × userVolume
- */
 function fadeIn() {
   cancelFade();
 
-  // Guard: if the browser has no buffered data (stale URL, long pause,
-  // iOS background audio release), reload the source first.
-  // We only do this once per track (hasReloadAttempted) to avoid an
-  // infinite loop on a URL that is genuinely broken.
   if (audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA && !hasReloadAttempted) {
     hasReloadAttempted = true;
     reloadAndPlay();
@@ -406,13 +237,12 @@ function fadeIn() {
   function tick(now) {
     const elapsed  = now - startTime;
     const progress = Math.min(elapsed / FADE_DURATION_MS, 1);
-    // Ease-in quadratic: starts slow, ramps up naturally
     audio.volume = Math.pow(progress, 2) * target;
 
     if (progress < 1) {
       fadeRafId = requestAnimationFrame(tick);
     } else {
-      audio.volume = target;  // snap to exact target at end
+      audio.volume = target;
       fadeRafId    = null;
     }
   }
@@ -420,15 +250,6 @@ function fadeIn() {
   fadeRafId = requestAnimationFrame(tick);
 }
 
-/**
- * Fade audio.volume from its current value → 0 over FADE_DURATION_MS,
- * then pause and restore audio.volume to userVolume.
- *
- * The ramp uses ease-out quadratic: starts fast, slows to silence.
- * An optional callback fires after the pause completes.
- *
- * @param {Function|null} callback  Optional function to call after pause.
- */
 function fadeOut(callback = null) {
   cancelFade();
 
@@ -438,7 +259,6 @@ function fadeOut(callback = null) {
   function tick(now) {
     const elapsed  = now - startTime;
     const progress = Math.min(elapsed / FADE_DURATION_MS, 1);
-    // Ease-out quadratic: fast start, gentle silence
     audio.volume = startVol * Math.pow(1 - progress, 2);
 
     if (progress < 1) {
@@ -447,7 +267,6 @@ function fadeOut(callback = null) {
       audio.volume = 0;
       fadeRafId    = null;
       audio.pause();
-      // Restore userVolume so next play() starts the fade from the right target
       audio.volume = userVolume;
       if (callback) callback();
     }
@@ -456,29 +275,6 @@ function fadeOut(callback = null) {
   fadeRafId = requestAnimationFrame(tick);
 }
 
-// ═══════════════════════════════════════════
-//  ─── FEATURE 1: SWIPE GESTURES ──────────
-// ═══════════════════════════════════════════
-
-/**
- * Attach touch listeners to the vinyl stage.
- *
- * - touchstart: record the finger's starting position.
- * - touchend:   measure the delta; fire skip if threshold crossed.
- * - Vertical drift guard: if |deltaY| > SWIPE_VERT_MAX, reject the swipe
- *   so the user can scroll the page without accidentally skipping.
- * - { passive: true } on both listeners so the browser doesn't wait for
- *   JS before deciding whether to scroll — keeps 60fps on iOS Safari.
- *
- * Visual feedback:
- *   .swipe-left / .swipe-right CSS classes trigger the tilt animation.
- *   They are removed automatically on animationend.
- *
- * Hint arrows:
- *   On the very first touch, .show-hint class briefly reveals the arrow
- *   chevrons so the user discovers the feature. After 1.5s the class
- *   is removed and never shown again (tracked with a flag).
- */
 function bindSwipeGestures() {
   let touchStartX = 0;
   let touchStartY = 0;
@@ -488,7 +284,6 @@ function bindSwipeGestures() {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 
-    // Show hint arrows exactly once
     if (!hintShown) {
       hintShown = true;
       vinylStage.classList.add("show-hint");
@@ -500,16 +295,13 @@ function bindSwipeGestures() {
     const deltaX = e.changedTouches[0].clientX - touchStartX;
     const deltaY = e.changedTouches[0].clientY - touchStartY;
 
-    // Ignore if mostly vertical (user was probably scrolling)
     if (Math.abs(deltaY) > SWIPE_VERT_MAX) return;
-    // Ignore if too short to be intentional
     if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
 
     const direction = deltaX < 0 ? "swipe-left" : "swipe-right";
 
-    // Tilt animation — removed on animationend
     vinyl.classList.remove("swipe-left", "swipe-right");
-    void vinyl.offsetWidth;  // force reflow so removing then re-adding works
+    void vinyl.offsetWidth;
     vinyl.classList.add(direction);
     vinyl.addEventListener("animationend",
       () => vinyl.classList.remove("swipe-left", "swipe-right"),
@@ -517,16 +309,12 @@ function bindSwipeGestures() {
     );
 
     if (deltaX < 0) {
-      nextTrack();   // swipe left → next
+      nextTrack();
     } else {
-      prevTrack();   // swipe right → previous
+      prevTrack();
     }
   }, { passive: true });
 }
-
-// ═══════════════════════════════════════════
-//  FAVORITES
-// ═══════════════════════════════════════════
 
 function loadFavorites() {
   try {
@@ -595,10 +383,6 @@ function bindFavoritesControls() {
   });
 }
 
-// ═══════════════════════════════════════════
-//  AUTOPLAY TOGGLE
-// ═══════════════════════════════════════════
-
 function loadAutoplayPreference() {
   const stored    = localStorage.getItem(LS_AUTOPLAY_KEY);
   autoplayEnabled = stored === null ? true : stored === "true";
@@ -611,10 +395,6 @@ function bindAutoplayToggle() {
     localStorage.setItem(LS_AUTOPLAY_KEY, autoplayEnabled);
   });
 }
-
-// ═══════════════════════════════════════════
-//  SEARCH & FILTER
-// ═══════════════════════════════════════════
 
 function applyFilters() {
   const q = searchBar.value.trim().toLowerCase();
@@ -631,7 +411,6 @@ function applyFilters() {
   renderSongList(filteredSongs);
   reAttachActiveAfterFilter();
 
-  // Rebuild shuffle queue if shuffle is active — new filter changes the pool
   if (isShuffled) buildShuffleQueue();
 
   if (result.length === 0) {
@@ -644,10 +423,6 @@ function applyFilters() {
 }
 
 searchBar.addEventListener("input", applyFilters);
-
-// ═══════════════════════════════════════════
-//  RENDER SONG LIST
-// ═══════════════════════════════════════════
 
 function renderSongList(list) {
   songListEl.innerHTML = "";
@@ -713,21 +488,12 @@ function renderSongList(list) {
   highlightActiveRow();
 }
 
-// ═══════════════════════════════════════════
-//  LOAD TRACK
-// ═══════════════════════════════════════════
-
 function loadTrack(idx, autoPlay = false) {
   if (idx < 0 || idx >= filteredSongs.length) return;
 
-  // ── Critical: cancel any fade before switching tracks ──────────────
-  // Without this, a fade-out from a previous pause could be mid-animation
-  // when we call loadTrack. The audio.volume would be wrong for the new track.
   cancelFade();
   audio.volume = userVolume;
 
-  // Every deliberate track load resets the reload guard so the error handler
-  // gets exactly one automatic retry attempt for the new track's URL.
   hasReloadAttempted = false;
 
   currentIndex = idx;
@@ -754,7 +520,6 @@ function loadTrack(idx, autoPlay = false) {
   playerHeartBtn.setAttribute("aria-label",
     isFav ? "Remove from favorites" : "Add to favorites");
 
-  // Update shuffle position to match the newly loaded track
   if (isShuffled) {
     const posInQueue = shuffleQueue.indexOf(idx);
     if (posInQueue !== -1) shufflePos = posInQueue;
@@ -764,8 +529,24 @@ function loadTrack(idx, autoPlay = false) {
   updateMediaSession(song);
 
   if (autoPlay) {
-    // Use fadeIn so even track switches get the smooth ramp
-    fadeIn();
+    // ─ FIX: Wait for the browser to buffer before attempting playback.
+    // Calling fadeIn() directly after audio.load() means readyState=0
+    // (HAVE_NOTHING), which caused the guard inside fadeIn() to fire
+    // reloadAndPlay() on every track switch — wasteful and caused a
+    // duplicate network request. canplay fires once the browser has
+    // enough data to start; only then do we ramp volume and call play().
+    //
+    // updateMediaSession(song) is already called above this block,
+    // so lock-screen / Siri metadata is updated before playback begins.
+    //
+    // { once: true } auto-removes the handler if the user skips again
+    // before this track finishes buffering, so no stale listeners pile up.
+    audio.addEventListener("canplay", () => {
+      // Guard: if the user skipped to another track while we were
+      // buffering, currentIndex no longer matches idx — abort silently.
+      if (currentIndex !== idx) return;
+      fadeIn();
+    }, { once: true });
   } else {
     setPlayingState(false);
   }
@@ -775,14 +556,6 @@ function findOriginalIndex(song) {
   return songs.findIndex(s => s.id === song.id);
 }
 
-// ═══════════════════════════════════════════
-//  PLAY / PAUSE
-// ═══════════════════════════════════════════
-
-/**
- * togglePlay — entry point for all play/pause actions.
- * Routes through fadeIn / fadeOut instead of calling audio.play/pause directly.
- */
 function togglePlay() {
   if (!audio.src || currentIndex === -1) {
     if (filteredSongs.length > 0) loadTrack(0, true);
@@ -790,9 +563,9 @@ function togglePlay() {
   }
 
   if (isPlaying) {
-    fadeOut();    // ramps volume to 0, then pauses
+    fadeOut();
   } else {
-    fadeIn();     // sets volume 0, calls play(), ramps to userVolume
+    fadeIn();
   }
 }
 
@@ -815,21 +588,15 @@ function setPlayingState(playing) {
   if (activeEl) activeEl.classList.toggle("paused-indicator", !playing);
 }
 
-// ═══════════════════════════════════════════
-//  SKIP — respects shuffle queue
-// ═══════════════════════════════════════════
-
 function prevTrack() {
   if (filteredSongs.length === 0) return;
 
-  // If more than 3 seconds in: restart current track
   if (audio.currentTime > 3) {
     audio.currentTime = 0;
     return;
   }
 
   if (isShuffled && shuffleQueue.length > 0) {
-    // Walk backwards through shuffle history
     shufflePos = shufflePos <= 0 ? shuffleQueue.length - 1 : shufflePos - 1;
     loadTrack(shuffleQueue[shufflePos], isPlaying);
   } else {
@@ -837,25 +604,23 @@ function prevTrack() {
   }
 }
 
-function nextTrack() {
+function nextTrack(forcePlay = false) {
   if (filteredSongs.length === 0) return;
+
+  // forcePlay=true when called from ended handler (isPlaying is already false by then)
+  const shouldPlay = forcePlay || isPlaying;
 
   if (isShuffled && shuffleQueue.length > 0) {
     shufflePos++;
-    // If we've exhausted the queue, rebuild a fresh shuffle
     if (shufflePos >= shuffleQueue.length) {
       buildShuffleQueue();
       shufflePos = 0;
     }
-    loadTrack(shuffleQueue[shufflePos], isPlaying);
+    loadTrack(shuffleQueue[shufflePos], shouldPlay);
   } else {
-    loadTrack((currentIndex + 1) % filteredSongs.length, isPlaying);
+    loadTrack((currentIndex + 1) % filteredSongs.length, shouldPlay);
   }
 }
-
-// ═══════════════════════════════════════════
-//  AUDIO EVENTS
-// ═══════════════════════════════════════════
 
 audio.addEventListener("timeupdate", () => {
   if (!audio.duration) return;
@@ -877,57 +642,28 @@ seekBar.addEventListener("input", () => {
 audio.addEventListener("play",  () => setPlayingState(true));
 audio.addEventListener("pause", () => setPlayingState(false));
 
-/**
- * AUTOPLAY / SHUFFLE END-OF-TRACK LOGIC
- *
- * When autoplay is ON:
- *   nextTrack() handles both shuffled and sequential modes correctly.
- *
- * When autoplay is OFF:
- *   Stop cleanly. Restore progress bar to 100% so user sees track finished.
- */
 audio.addEventListener("ended", () => {
   if (autoplayEnabled) {
-    nextTrack();
+    // ─ FIX: pass forcePlay=true.
+    // The browser fires 'pause' before 'ended' on natural track end,
+    // which sets isPlaying=false before we ever reach here.
+    // nextTrack() was therefore calling loadTrack(idx, false) — next
+    // song loaded but never played. Passing true bypasses the stale flag.
+    nextTrack(true);
   } else {
     setPlayingState(false);
     progressFill.style.width = "100%";
   }
 });
 
-/**
- * NETWORK ERROR HANDLER (new in v4)
- * ───────────────────────────────────
- * The browser fires 'error' on the audio element when:
- *   • The network request for the src URL fails (expired Dropbox token → 401/403)
- *   • The media format is unsupported
- *   • A decode error occurs mid-stream
- *
- * MediaError.code values:
- *   MEDIA_ERR_ABORTED      1  — user or script aborted (not a real failure)
- *   MEDIA_ERR_NETWORK      2  — network failure mid-load (expired URL, offline)
- *   MEDIA_ERR_DECODE       3  — decode error (corrupt file)
- *   MEDIA_ERR_SRC_NOT_SUPPORTED 4 — unsupported format or empty src
- *
- * Strategy:
- *   1. For network errors (code 2): attempt one silent reload via reloadAndPlay().
- *      This handles the common case of a Dropbox signed URL expiring mid-session.
- *   2. If the reload already failed (hasReloadAttempted === true), or it's a
- *      non-network error, show the UI error message and stop trying.
- *   3. Code 1 (aborted by us) is silently ignored — it fires during every
- *      deliberate track switch and is not a real error.
- */
 audio.addEventListener("error", () => {
   const err  = audio.error;
   const code = err ? err.code : 0;
 
-  // Code 1 = MEDIA_ERR_ABORTED: fires whenever we call audio.load() to switch
-  // tracks. This is intentional behaviour, not an error — ignore it silently.
   if (code === MediaError.MEDIA_ERR_ABORTED) return;
 
   console.warn(`[Sonata] Audio error — code ${code}:`, err ? err.message : "unknown");
 
-  // Network error + first attempt → try a fresh reload before giving up
   if (code === MediaError.MEDIA_ERR_NETWORK && !hasReloadAttempted) {
     hasReloadAttempted = true;
     console.info("[Sonata] Network error detected — attempting one automatic reload");
@@ -935,18 +671,12 @@ audio.addEventListener("error", () => {
     return;
   }
 
-  // All other cases (decode error, unsupported format, or reload already tried):
-  // surface the error to the user and reset state cleanly.
   console.error("[Sonata] Unrecoverable audio error — giving up");
   setPlayingState(false);
   cancelFade();
   audio.volume = userVolume;
   trackTitle.textContent = "⚠ Could not load track";
 });
-
-// ═══════════════════════════════════════════
-//  CONTROLS
-// ═══════════════════════════════════════════
 
 btnPlay.addEventListener("click", togglePlay);
 btnPrev.addEventListener("click", prevTrack);
@@ -962,27 +692,16 @@ document.addEventListener("keydown", (e) => {
     case "ArrowDown":  e.preventDefault(); setVolume(userVolume - 0.1); break;
     case "KeyN":       nextTrack();        break;
     case "KeyP":       prevTrack();        break;
-    case "KeyS":       btnShuffle.click(); break;   // S = toggle shuffle
+    case "KeyS":       btnShuffle.click(); break;
     case "KeyL":
       if (filteredSongs[currentIndex]) toggleFavorite(filteredSongs[currentIndex].id, true);
       break;
   }
 });
 
-// ═══════════════════════════════════════════
-//  VOLUME
-// ═══════════════════════════════════════════
-
-/**
- * setVolume — the only function that should update userVolume.
- * If a fade is in progress, we update userVolume (the target) but
- * leave audio.volume to the fade animation — the ramp will naturally
- * converge to the new target on its next tick.
- */
 function setVolume(val) {
   const v  = clamp(parseFloat(val), 0, 1);
   userVolume = v;
-  // Only directly set audio.volume if no fade is running
   if (fadeRafId === null) audio.volume = v;
   volumeFill.style.width = `${v * 100}%`;
   volumeBar.value = v;
@@ -990,10 +709,6 @@ function setVolume(val) {
 }
 
 volumeBar.addEventListener("input", () => setVolume(volumeBar.value));
-
-// ═══════════════════════════════════════════
-//  HIGHLIGHT ACTIVE ROW
-// ═══════════════════════════════════════════
 
 function highlightActiveRow() {
   document.querySelectorAll(".song-item").forEach(el =>
@@ -1021,10 +736,6 @@ function reAttachActiveAfterFilter() {
   }
 }
 
-// ═══════════════════════════════════════════
-//  RESTORE SESSION
-// ═══════════════════════════════════════════
-
 function restoreSession() {
   const savedVol = localStorage.getItem(LS_VOL_KEY);
   setVolume(savedVol !== null ? parseFloat(savedVol) : 0.8);
@@ -1033,19 +744,13 @@ function restoreSession() {
   if (savedIdx >= 0 && savedIdx < songs.length) {
     const song        = songs[savedIdx];
     const filteredIdx = filteredSongs.findIndex(s => s.id === song.id);
-    if (filteredIdx !== -1) loadTrack(filteredIdx, false);  // load, no autoplay
+    if (filteredIdx !== -1) loadTrack(filteredIdx, false);
   }
 }
-
-// ═══════════════════════════════════════════
-//  MEDIA SESSION API (Siri / Lock Screen)
-// ═══════════════════════════════════════════
 
 function setupMediaSession() {
   if (!("mediaSession" in navigator)) return;
 
-  // Wire transport actions — these must call our wrapper functions,
-  // not audio.play/pause directly, so fades and shuffle routing apply.
   navigator.mediaSession.setActionHandler("play",          () => { if (!isPlaying) fadeIn(); });
   navigator.mediaSession.setActionHandler("pause",         () => { if (isPlaying)  fadeOut(); });
   navigator.mediaSession.setActionHandler("previoustrack", prevTrack);
@@ -1087,11 +792,7 @@ function updatePositionState() {
       playbackRate: audio.playbackRate,
       position:     audio.currentTime,
     });
-  } catch (_) { /* not all browsers support setPositionState */ }
+  } catch (_) {}
 }
-
-// ═══════════════════════════════════════════
-//  GO
-// ═══════════════════════════════════════════
 
 init();
